@@ -1,16 +1,16 @@
 # redux-extract-state
 Extract state of component to redux store.
 
-## Idea
+## Usage:
 
 index.js
 ```javascript
 import { createStore } from 'redux';
-import { reducersWrapper } from 'redux-extract-state';
+import extractState, { reducersWrapper } from 'redux-extract-state';
 import reducers from './reducers.js';
 
 // wrapper reducers.
-let store = createStore(reducersWrapper(reducers));
+let store = extractState(createStore(reducersWrapper(reducers)));
 ...
 
 ```
@@ -65,7 +65,7 @@ let B = React.createClass({
 
 export default connect(
 	(state) => ({
-		...getState(key)(state),
+		...getState(state)(key),
 		anotherState: 'another state'
 	}))(B);
 ```
