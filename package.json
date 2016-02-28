@@ -1,13 +1,15 @@
 {
   "name": "redux-extract-state",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Extract state of component to redux store.",
   "main": "./dist/main.js",
   "directories": {
-    "example": "example"
+    "example": "examples"
   },
+  "keywords": ["react", "redux", "state", "extract"],
   "scripts": {
     "start": "webpack",
+    "build": "webpack",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

@@ -75,6 +75,8 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	var _action = __webpack_require__(3);
 
+	var _action2 = _interopRequireDefault(_action);
+
 	var _reducersWrapper = __webpack_require__(4);
 
 	var _reducersWrapper2 = _interopRequireDefault(_reducersWrapper);
@@ -89,31 +91,74 @@ return /******/ (function(modules) { // webpackBootstrap
 	};
 
 	function isObject(o) {
-		return {}.toString.call(o) === '[object Object]';
+		return Object.prototype.toString.call(o) === '[object Object]';
+	}
+
+	function isFunction(fn) {
+		return typeof fn === 'function';
 	}
 
 	exports.reducersWrapper = _reducersWrapper2.default;
 	function extract(key, Component) {
+
+		/**
+	  * Check if key is already in use.
+	  */
+
 		if (~_keys.indexOf(key)) {
 			(0, _warning2.default)('Double components key with same name ' + key);
+		} else {
+			_keys.push(key);
 		}
-		_keys.push(key);
 
-		var Extract = function Extract() {
+		/**
+	  * Extend callback with dispatch action
+	  */
+
+		function callbackExtend(callback) {
+			return function () {
+				_store.dispatch((0, _action2.default)(key, this.state));
+				if (isFunction(callback)) {
+					callback.apply(this, arguments);
+				}
+			};
+		}
+
+		/**
+	  * Create new class
+	  */
+
+		function Extract() {
 			Component.apply(this, arguments);
-			_store.dispatch((0, _action.setState)(key, this.state));
-		};
+			_store.dispatch((0, _action2.default)(key, this.state));
+		}
 
 		Extract.prototype = Object.create(Component.prototype);
 		Extract.prototype.constructor = Extract;
-		Extract.prototype.setState = function (state) {
-			_store.dispatch((0, _action.setState)(key, _extends({}, this.state, state)));
-			return Component.prototype.setState.apply(this, arguments);
+
+		/**
+	  * Extend setState
+	  */
+
+		Extract.prototype.setState = function (nextState, cb) {
+			return Component.prototype.setState.call(this, nextState, callbackExtend(cb));
 		};
 
-		for (var _key in Component) {
-			if (Component.hasOwnProperty(_key)) {
-				Extract[_key] = Component[_key];
+		/**
+	  * Extend forceUpdate
+	  */
+
+		Extract.prototype.forceUpdate = function (cb) {
+			return Component.prototype.forceUpdate.call(this, callbackExtend(cb));
+		};
+
+		/**
+	  * Copy static methods of Component
+	  */
+
+		for (var method in Component) {
+			if (Component.hasOwnProperty(method)) {
+				Extract[method] = Component[method];
 			}
 		}
 
@@ -123,7 +168,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	function getState(state) {
 		return function (key, fn) {
 			var result = state[_constants.MODULE_KEY][key];
-			if (typeof fn === 'function') {
+			if (isFunction(fn)) {
 				result = fn(result);
 			}
 			if (!isObject(result)) {
@@ -184,7 +229,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	Object.defineProperty(exports, "__esModule", {
 		value: true
 	});
-	exports.setState = setState;
+	exports.default = setState;
 
 	var _constants = __webpack_require__(2);
 

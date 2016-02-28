@@ -1,6 +1,6 @@
 import warning from './warning.js';
 import { MODULE_KEY } from './constants.js';
-import { setState } from './action.js';
+import action from './action.js';
 import reducersWrapper from './reducersWrapper.js';
 
 let _keys = [];
@@ -9,34 +9,76 @@ let _store = {
 };
 
 function isObject (o) {
-	return {}.toString.call(o) === '[object Object]';
+	return Object.prototype.toString.call(o) === '[object Object]';
+}
+
+function isFunction (fn) {
+	return typeof fn === 'function';
 }
 
 export { reducersWrapper }
+
 export function extract (key, Component) {
+
+	/**
+	 * Check if key is already in use.
+	 */
+
 	if (~_keys.indexOf(key)) {
 		warning(`Double components key with same name ${key}`);
 	}
-	_keys.push(key);
+	else {
+		_keys.push(key);
+	}
 
-	let Extract = function () {
+	/**
+	 * Extend callback with dispatch action
+	 */
+
+	function callbackExtend(callback) {
+		return function () {
+			_store.dispatch(action(key, this.state));
+			if (isFunction(callback)) {
+				callback.apply(this, arguments);
+			}
+		};
+	}
+
+	/**
+	 * Create new class, which inherits properties from Component.prototype
+	 */
+
+	function Extract () {
 		Component.apply(this, arguments);
-		_store.dispatch(setState(key, this.state));
-	};
+		_store.dispatch(action(key, this.state));
+	}
 
 	Extract.prototype = Object.create(Component.prototype);
 	Extract.prototype.constructor = Extract;
-	Extract.prototype.setState = function (state) {
-		_store.dispatch(setState(key, {
-			...this.state,
-			...state
-		}));
-		return Component.prototype.setState.apply(this, arguments);
-	}
 
-	for (let key in Component) {
-		if (Component.hasOwnProperty(key)) {
-			Extract[key] = Component[key];
+	/**
+	 * Extend setState
+	 */
+
+	Extract.prototype.setState = function (nextState, cb) {
+		return Component.prototype.setState.call(this, nextState, callbackExtend(cb));
+	};
+
+	/**
+	 * Extend forceUpdate
+	 */
+
+	Extract.prototype.forceUpdate = function (cb) {
+		return Component.prototype.forceUpdate.call(this, callbackExtend(cb));
+	};
+
+	/**
+	 * Copy static methods of Component
+	 */
+
+	for (let method in Component) {
+		if (Component.hasOwnProperty(method)) {
+			Extract[method] = Component[method];
 		}
 	}
 
@@ -46,7 +88,7 @@ export function extract (key, Component) {
 export function getState (state) {
 	return (key, fn) => {
 		let result = state[MODULE_KEY][key];
-		if (typeof fn === 'function') {
+		if (isFunction(fn)) {
 			result = fn(result);
 		}
 		if (!isObject(result)) {
