@@ -15,59 +15,71 @@ let store = extractState(createStore(reducersWrapper(reducers)));
 
 ```
 
-A.js
+Counter.js
 ```javascript
-import React, { Component } from 'react';
 import { extract } from 'redux-extract-state';
 
-let A = React.createClass({
+let Counter = React.createClass({
 	getInitialState () {
 		return {
 			counter: 0
 		};
 	},
-
 	render () {
 		return (
 			<button onClick={() => this._clickHandler()}>Counter</button>
 			)
 	},
-
 	_clickHandler () {
 		let { counter } = this.state;
 		this.setState({counter: counter + 1})
 	}
 });
 
-// export key, so it can be used for getter.
-export const key = 'A-key';
-export default extract(key, A);
+export default extract(Counter, 'propKey' /* prop name, default is exKey */);
 ```
 
-B.js
+Watcher.js
 ```javascript
-import React, { Component } from 'react';
-import { connect } from 'react-redux';
-import { getState } from 'redux-extract-state';
-import { key } from 'A.js'
 
-let B = React.createClass({
-	render () {
-		let {
-			counter,
-			anotherState
-		} = this.state;
-		return (
-			<span>A counter {counter}</span>
-		)
-	}
-});
+let Watcher = () => {
+	let {
+		counter
+	} = this.props;
+	return (
+		<span>Counter {counter}</span>
+	)
+};
+
+export default Watcher;
+
+```
+
+App.js
+```javascript
+import Counter from './Counter.js';
+import Watcher from './Watcher.js';
+import { getState } from 'redux-extract-key';
+import randomKey from 'redux-extract-key/randomKey';
+
+// randomKey will return unique key, you no need to use it.
+let counterKey = randomKey();
+let App = () => {
+	let { counter } = this.props
+	return (
+		<div>
+			{/* pass counterKey to propKey prop (we've just set on Counter.js) */}
+			<Counter propKey={counterKey}/>
+			<Watcher counter={counter}/>
+		</div>
+	)
+};
 
 export default connect(
 	(state) => ({
-		...getState(state)(key),
-		anotherState: 'another state'
-	}))(B);
+		// getState will use counterKey to return states of Counter
+		...getState(state)(counterKey)
+	}))(App);
 ```
 
 
