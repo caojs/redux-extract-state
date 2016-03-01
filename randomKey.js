@@ -1,4 +1,4 @@
-export default function (prefix) {
+export default function randomKey (prefix) {
 	if (typeof prefix !== 'string') {
 		prefix = '@@EXTRACT_STATE_';
 	}
