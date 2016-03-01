@@ -3,10 +3,10 @@
 		module.exports = factory();
 	else if(typeof define === 'function' && define.amd)
 		define([], factory);
-	else {
-		var a = factory();
-		for(var i in a) (typeof exports === 'object' ? exports : root)[i] = a[i];
-	}
+	else if(typeof exports === 'object')
+		exports["ReduxExtractState"] = factory();
+	else
+		root["ReduxExtractState"] = factory();
 })(this, function() {
 return /******/ (function(modules) { // webpackBootstrap
 /******/ 	// The module cache
@@ -67,26 +67,24 @@ return /******/ (function(modules) { // webpackBootstrap
 	exports.getState = getState;
 	exports.default = extractState;
 
-	var _warning = __webpack_require__(1);
+	var _warning = __webpack_require__(4);
 
 	var _warning2 = _interopRequireDefault(_warning);
 
-	var _constants = __webpack_require__(2);
+	var _constants = __webpack_require__(1);
 
-	var _action = __webpack_require__(3);
+	var _actionCreators = __webpack_require__(2);
 
-	var _action2 = _interopRequireDefault(_action);
-
-	var _reducersWrapper = __webpack_require__(4);
+	var _reducersWrapper = __webpack_require__(3);
 
 	var _reducersWrapper2 = _interopRequireDefault(_reducersWrapper);
 
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-	var _keys = [];
-	var _store = {
+	var idents = [];
+	var store = {
 		dispatch: function dispatch() {
-			return (0, _warning2.default)('You may forgot extractState(store) or has problem with redux store');
+			return (0, _warning2.default)('Warning: Forget use extractState(store)');
 		}
 	};
 
@@ -99,17 +97,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	}
 
 	exports.reducersWrapper = _reducersWrapper2.default;
-	function extract(key, Component) {
-
-		/**
-	  * Check if key is already in use.
-	  */
-
-		if (~_keys.indexOf(key)) {
-			(0, _warning2.default)('Double components key with same name ' + key);
-		} else {
-			_keys.push(key);
-		}
+	function extract(Component, prop) {
+		prop = prop || _constants.DEFAULT_PROP_NAME;
 
 		/**
 	  * Extend callback with dispatch action
@@ -117,7 +106,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 		function callbackExtend(callback) {
 			return function () {
-				_store.dispatch((0, _action2.default)(key, this.state));
+				store.dispatch((0, _actionCreators.set)(this._esComponentIdent, this.state));
 				if (isFunction(callback)) {
 					callback.apply(this, arguments);
 				}
@@ -125,31 +114,82 @@ return /******/ (function(modules) { // webpackBootstrap
 		}
 
 		/**
-	  * Create new class
+	  * Create new class, which inherits properties from Component.prototype
 	  */
 
-		function Extract() {
+		function ExtractContainer(props) {
 			Component.apply(this, arguments);
-			_store.dispatch((0, _action2.default)(key, this.state));
+
+			var ident = props[prop];
+			if (!ident) {
+
+				// Warning when don't pass value to prop
+				(0, _warning2.default)('Warning: You forget pass value to ' + prop + ' prop');
+			} else {
+
+				// Check and throw error in case the key prop is not unique
+				if (idents.indexOf(ident) >= 0) {
+					throw new Error('The ' + prop + ' prop must be unique.');
+				}
+
+				this._esComponentIdent = ident;
+			}
 		}
 
-		Extract.prototype = Object.create(Component.prototype);
-		Extract.prototype.constructor = Extract;
+		ExtractContainer.prototype = Object.create(Component.prototype);
+		ExtractContainer.prototype.constructor = ExtractContainer;
+
+		var containerProto = ExtractContainer.prototype;
+		var _Component$prototype = Component.prototype;
+		var setState = _Component$prototype.setState;
+		var forceUpdate = _Component$prototype.forceUpdate;
+		var componentDidMount = _Component$prototype.componentDidMount;
+		var componentWillUnmount = _Component$prototype.componentWillUnmount;
 
 		/**
 	  * Extend setState
 	  */
 
-		Extract.prototype.setState = function (nextState, cb) {
-			return Component.prototype.setState.call(this, nextState, callbackExtend(cb));
+		containerProto.setState = function (nextState, cb) {
+			return setState.call(this, nextState, callbackExtend(cb));
 		};
 
 		/**
 	  * Extend forceUpdate
 	  */
 
-		Extract.prototype.forceUpdate = function (cb) {
-			return Component.prototype.forceUpdate.call(this, callbackExtend(cb));
+		containerProto.forceUpdate = function (cb) {
+			return forceUpdate.call(this, callbackExtend(cb));
+		};
+
+		containerProto.componentDidMount = function () {
+			idents.push(this._esComponentIdent);
+			store.dispatch((0, _actionCreators.set)(this._esComponentIdent, this.state));
+
+			// call componentDidMount function on base Component if has any.
+			if (isFunction(componentDidMount)) {
+				componentDidMount.apply(this, arguments);
+			}
+		};
+
+		/**
+	  * Cleanup
+	  */
+
+		containerProto.componentWillUnmount = function () {
+			var index = idents.indexOf(this._esComponentIdent);
+
+			if (index >= 0) {
+				idents.splice(index, 1);
+			}
+
+			// dispatch remove action, so store can clean data.
+			store.dispatch((0, _actionCreators.remove)(this._esComponentIdent));
+
+			// call componentWillUnmount function on base Component if has any.
+			if (isFunction(componentWillUnmount)) {
+				componentWillUnmount.apply(this, arguments);
+			};
 		};
 
 		/**
@@ -158,29 +198,33 @@ return /******/ (function(modules) { // webpackBootstrap
 
 		for (var method in Component) {
 			if (Component.hasOwnProperty(method)) {
-				Extract[method] = Component[method];
+				ExtractContainer[method] = Component[method];
 			}
 		}
 
-		return Extract;
+		return ExtractContainer;
 	}
 
 	function getState(state) {
 		return function (key, fn) {
 			var result = state[_constants.MODULE_KEY][key];
+
+			if (!isObject(result)) {
+				(0, _warning2.default)('Warning: ' + key + ' not return object');
+				result = {};
+			}
+
 			if (isFunction(fn)) {
 				result = fn(result);
 			}
-			if (!isObject(result)) {
-				(0, _warning2.default)(key + ' not return object');
-			}
+
 			return result;
 		};
 	}
 
-	function extractState(store) {
-		_store = _extends({}, _store, store);
-		return store;
+	function extractState(reduxStore) {
+		store = _extends({}, store, reduxStore);
+		return reduxStore;
 	}
 
 /***/ },
@@ -192,36 +236,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	Object.defineProperty(exports, "__esModule", {
 	  value: true
 	});
-	exports.default = warning;
-	function warning(message) {
-	  /* eslint-disable no-console */
-	  if (typeof console !== 'undefined' && typeof console.error === 'function') {
-	    console.error(message);
-	  }
-	  /* eslint-enable no-console */
-	  try {
-	    // This error was thrown as a convenience so that you can use this stack
-	    // to find the callsite that caused this warning to fire.
-	    throw new Error(message);
-	    /* eslint-disable no-empty */
-	  } catch (e) {}
-	  /* eslint-enable no-empty */
-	}
+	var MODULE_KEY = exports.MODULE_KEY = '@@EXTRACT_STATE_KEY@@';
+	var SET_ACTION = exports.SET_ACTION = '@@EXTRACT_STATE_SET@@';
+	var REMOVE_ACTION = exports.REMOVE_ACTION = '@@EXTRACT_STATE_REMOVE@@';
+	var DEFAULT_PROP_NAME = exports.DEFAULT_PROP_NAME = 'exKey';
 
 /***/ },
 /* 2 */
-/***/ function(module, exports) {
-
-	'use strict';
-
-	Object.defineProperty(exports, "__esModule", {
-	  value: true
-	});
-	var MODULE_KEY = exports.MODULE_KEY = '@@EXTRACT_STATE_KEY@@';
-	var ACTION_TYPE = exports.ACTION_TYPE = '@@EXTRACT_STATE_ACTION@@';
-
-/***/ },
-/* 3 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -229,21 +250,29 @@ return /******/ (function(modules) { // webpackBootstrap
 	Object.defineProperty(exports, "__esModule", {
 		value: true
 	});
-	exports.default = setState;
+	exports.set = set;
+	exports.remove = remove;
 
-	var _constants = __webpack_require__(2);
+	var _constants = __webpack_require__(1);
 
 	function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
 
-	function setState(key, state) {
+	function set(key, state) {
 		return {
-			type: _constants.ACTION_TYPE,
+			type: _constants.SET_ACTION,
 			payload: _defineProperty({}, key, state)
 		};
 	}
 
+	function remove(key) {
+		return {
+			type: _constants.REMOVE_ACTION,
+			payload: key
+		};
+	}
+
 /***/ },
-/* 4 */
+/* 3 */
 /***/ function(module, exports, __webpack_require__) {
 
 	'use strict';
@@ -256,7 +285,7 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	exports.default = reducersWrapper;
 
-	var _constants = __webpack_require__(2);
+	var _constants = __webpack_require__(1);
 
 	function _defineProperty(obj, key, value) { if (key in obj) { Object.defineProperty(obj, key, { value: value, enumerable: true, configurable: true, writable: true }); } else { obj[key] = value; } return obj; }
 
@@ -266,12 +295,44 @@ return /******/ (function(modules) { // webpackBootstrap
 			var action = arguments[1];
 
 			switch (action.type) {
-				case _constants.ACTION_TYPE:
+				case _constants.SET_ACTION:
 					return _extends({}, state, _defineProperty({}, _constants.MODULE_KEY, _extends({}, state[_constants.MODULE_KEY], action.payload)));
+
+				case _constants.REMOVE_ACTION:
+					delete state[_constants.MODULE_KEY][action.payload];
+					return _extends({}, state, _defineProperty({}, _constants.MODULE_KEY, _extends({}, state[_constants.MODULE_KEY])));
+
 				default:
 					return reducer(state, action);
 			}
 		};
+	}
+
+/***/ },
+/* 4 */
+/***/ function(module, exports, __webpack_require__) {
+
+	'use strict';
+
+	Object.defineProperty(exports, "__esModule", {
+	  value: true
+	});
+	exports.default = warning;
+	function warning(message) {
+	  if ((undefined) !== 'production') {
+	    /* eslint-disable no-console */
+	    if (typeof console !== 'undefined' && typeof console.error === 'function') {
+	      console.error(message);
+	    }
+	    /* eslint-enable no-console */
+	    try {
+	      // This error was thrown as a convenience so that you can use this stack
+	      // to find the callsite that caused this warning to fire.
+	      throw new Error(message);
+	      /* eslint-disable no-empty */
+	    } catch (e) {}
+	    /* eslint-enable no-empty */
+	  }
 	}
 
 /***/ }

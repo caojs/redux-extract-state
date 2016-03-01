@@ -1,11 +1,11 @@
 import warning from './warning.js';
-import { MODULE_KEY } from './constants.js';
-import action from './action.js';
+import { MODULE_KEY, DEFAULT_PROP_NAME } from './constants.js';
+import { set, remove } from './actionCreators.js';
 import reducersWrapper from './reducersWrapper.js';
 
-let _keys = [];
-let _store = {
-	dispatch: () => warning(`You may forgot extractState(store) or has problem with redux store`)
+let idents = [];
+let store = {
+	dispatch: () => warning(`Warning: Forget use extractState(store)`)
 };
 
 function isObject (o) {
@@ -18,18 +18,8 @@ function isFunction (fn) {
 
 export { reducersWrapper }
 
-export function extract (key, Component) {
-
-	/**
-	 * Check if key is already in use.
-	 */
-
-	if (~_keys.indexOf(key)) {
-		warning(`Double components key with same name ${key}`);
-	}
-	else {
-		_keys.push(key);
-	}
+export function extract (Component, prop) {
+	prop = prop || DEFAULT_PROP_NAME;
 
 	/**
 	 * Extend callback with dispatch action
@@ -37,7 +27,7 @@ export function extract (key, Component) {
 
 	function callbackExtend(callback) {
 		return function () {
-			_store.dispatch(action(key, this.state));
+			store.dispatch(set(this._esComponentIdent, this.state));
 			if (isFunction(callback)) {
 				callback.apply(this, arguments);
 			}
@@ -48,29 +38,83 @@ export function extract (key, Component) {
 	 * Create new class, which inherits properties from Component.prototype
 	 */
 
-	function Extract () {
+	function ExtractContainer (props) {
 		Component.apply(this, arguments);
-		_store.dispatch(action(key, this.state));
+
+		let ident = props[prop];
+		if (!ident) {
+
+			// Warning when don't pass value to prop
+			warning(`Warning: You forget pass value to ${prop} prop`);
+		}
+		else {
+
+			// Check and throw error in case the key prop is not unique
+			if (idents.indexOf(ident) >= 0) {
+				throw new Error(`The ${prop} prop must be unique.`)
+			}
+
+			this._esComponentIdent = ident;
+		}
 	}
 
-	Extract.prototype = Object.create(Component.prototype);
-	Extract.prototype.constructor = Extract;
+	ExtractContainer.prototype = Object.create(Component.prototype);
+	ExtractContainer.prototype.constructor = ExtractContainer;
+
+	let containerProto = ExtractContainer.prototype;
+	let {
+		setState,
+		forceUpdate,
+		componentDidMount,
+		componentWillUnmount
+	} = Component.prototype;
 
 	/**
 	 * Extend setState
 	 */
 
-	Extract.prototype.setState = function (nextState, cb) {
-		return Component.prototype.setState.call(this, nextState, callbackExtend(cb));
+	containerProto.setState = function (nextState, cb) {
+		return setState.call(this, nextState, callbackExtend(cb));
 	};
 
 	/**
 	 * Extend forceUpdate
 	 */
 
-	Extract.prototype.forceUpdate = function (cb) {
-		return Component.prototype.forceUpdate.call(this, callbackExtend(cb));
+	containerProto.forceUpdate = function (cb) {
+		return forceUpdate.call(this, callbackExtend(cb));
 	};
+
+	containerProto.componentDidMount = function () {
+		idents.push(this._esComponentIdent);
+		store.dispatch(set(this._esComponentIdent, this.state));
+
+		// call componentDidMount function on base Component if has any.
+		if (isFunction(componentDidMount)) {
+			componentDidMount.apply(this, arguments);
+		}
+	};
+
+	/**
+	 * Cleanup
+	 */
+
+	containerProto.componentWillUnmount = function () {
+		let index = idents.indexOf(this._esComponentIdent);
+
+		if (index >= 0) {
+			idents.splice(index, 1);
+		}
+
+		// dispatch remove action, so store can clean data.
+		store.dispatch(remove(this._esComponentIdent));
+
+
+		// call componentWillUnmount function on base Component if has any.
+		if (isFunction(componentWillUnmount)) {
+			componentWillUnmount.apply(this, arguments);
+		};
+	}
 
 	/**
 	 * Copy static methods of Component
@@ -78,30 +122,34 @@ export function extract (key, Component) {
 
 	for (let method in Component) {
 		if (Component.hasOwnProperty(method)) {
-			Extract[method] = Component[method];
+			ExtractContainer[method] = Component[method];
 		}
 	}
 
-	return Extract;
+	return ExtractContainer;
 }
 
 export function getState (state) {
 	return (key, fn) => {
 		let result = state[MODULE_KEY][key];
+
+		if (!isObject(result)) {
+			warning(`Warning: ${key} not return object`);
+			result = {};
+		}
+
 		if (isFunction(fn)) {
 			result = fn(result);
 		}
-		if (!isObject(result)) {
-			warning(`${key} not return object`);
-		}
+
 		return result;
 	};
 }
 
-export default function extractState (store) {
-	_store = {
-		..._store,
-		...store
+export default function extractState (reduxStore) {
+	store = {
+		...store,
+		...reduxStore
 	};
-	return store;
+	return reduxStore;
 }
