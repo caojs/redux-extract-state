@@ -9,5 +9,5 @@ import App from './App.js';
 let store = extractState(createStore(reducersWrapper(reducers)));
 
 render(
-	<Provider store={store}><App/></Provider>,
-	document.getElementById('app'));
+  <Provider store={store}><App/></Provider>,
+  document.getElementById('app'));

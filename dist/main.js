@@ -81,7 +81,13 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
 
-	var idents = [];
+	var idents = {};
+	var reservedProps = {
+		key: true,
+		ref: true,
+		__self: true,
+		__source: true
+	};
 	var store = {
 		dispatch: function dispatch() {
 			return (0, _warning2.default)('Warning: Forget use extractState(store)');
@@ -98,6 +104,10 @@ return /******/ (function(modules) { // webpackBootstrap
 
 	exports.reducersWrapper = _reducersWrapper2.default;
 	function extract(Component, prop) {
+		if (reservedProps[prop]) {
+			throw new Error('Error: ' + prop + ' is a react reserved prop.');
+		}
+
 		prop = prop || _constants.DEFAULT_PROP_NAME;
 
 		/**
@@ -128,10 +138,11 @@ return /******/ (function(modules) { // webpackBootstrap
 			} else {
 
 				// Check and throw error in case the key prop is not unique
-				if (idents.indexOf(ident) >= 0) {
+				if (idents[ident]) {
 					throw new Error('The ' + prop + ' prop must be unique.');
 				}
 
+				idents[ident] = true;
 				this._esComponentIdent = ident;
 			}
 		}
@@ -163,7 +174,6 @@ return /******/ (function(modules) { // webpackBootstrap
 		};
 
 		containerProto.componentDidMount = function () {
-			idents.push(this._esComponentIdent);
 			store.dispatch((0, _actionCreators.set)(this._esComponentIdent, this.state));
 
 			// call componentDidMount function on base Component if has any.
@@ -177,11 +187,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	  */
 
 		containerProto.componentWillUnmount = function () {
-			var index = idents.indexOf(this._esComponentIdent);
-
-			if (index >= 0) {
-				idents.splice(index, 1);
-			}
+			idents[this._esComponentIdent] = null;
 
 			// dispatch remove action, so store can clean data.
 			store.dispatch((0, _actionCreators.remove)(this._esComponentIdent));
@@ -236,9 +242,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	Object.defineProperty(exports, "__esModule", {
 	  value: true
 	});
-	var MODULE_KEY = exports.MODULE_KEY = '@@EXTRACT_STATE_KEY@@';
-	var SET_ACTION = exports.SET_ACTION = '@@EXTRACT_STATE_SET@@';
-	var REMOVE_ACTION = exports.REMOVE_ACTION = '@@EXTRACT_STATE_REMOVE@@';
+	var MODULE_KEY = exports.MODULE_KEY = '@@extractState/KEY';
+	var SET_ACTION = exports.SET_ACTION = '@@extractState/SET';
+	var REMOVE_ACTION = exports.REMOVE_ACTION = '@@extractState/REMOVE';
 	var DEFAULT_PROP_NAME = exports.DEFAULT_PROP_NAME = 'exKey';
 
 /***/ },
